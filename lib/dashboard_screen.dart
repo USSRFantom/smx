@@ -19,7 +19,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   double _oil = 60;
   int _distanceTravelled = 2100;
 
-  List<bool> _lamps = List.generate(10, (_) => false);
+  final List<bool> _lamps = List.generate(10, (_) => false);
 
   Timer? _lampTimer;
 

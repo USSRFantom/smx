@@ -198,17 +198,24 @@ class SpeedometerPainter extends CustomPainter {
 
     final sweep = sweepAngle * t;
 
+    final arcRadius = radius * 0.92;
+
     final rect = Rect.fromCircle(
       center: center,
-      radius: radius * 0.92,
+      radius: arcRadius,
     );
 
     final paint = Paint()
-      ..shader = const LinearGradient(
-        colors: [Colors.red, Colors.redAccent],
+      ..shader = RadialGradient(
+        colors: [
+          Colors.redAccent.withOpacity(0.0),
+          Colors.red.withOpacity(0.1),
+          Colors.redAccent,
+        ],
+        stops: const [0.7, 0.9, 1.0],
       ).createShader(rect)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = radius * 0.05
+      ..strokeWidth = radius * 0.07 //
       ..strokeCap = StrokeCap.round;
 
     final arcStart = -pi / 2 + startAngle;
