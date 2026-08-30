@@ -2,8 +2,8 @@ import 'dart:async';
 import 'dart:math';
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:smx/constants.dart';
+import 'package:smx/services/arduino_service.dart';
 import 'package:smx/speedometer.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -19,6 +19,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
   double _oil = 60;
   int _distanceTravelled = 2100;
 
+  final ArduinoService _arduinoService = ArduinoService();
+
+  StreamSubscription<List<bool>>? _arduinoSubscription;
+
+
+
+
   final List<bool> _lamps = List.generate(10, (_) => false);
 
   Timer? _lampTimer;
@@ -31,11 +38,46 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Timer? _timer;
 
+  Future<void> _connectArduino() async {
+    final connected = await _arduinoService.connect();
+
+    if (!connected) {
+      print('Arduino не подключена');
+      return;
+    }
+
+    _arduinoSubscription = _arduinoService.channels.listen(
+          (channels) {
+        if (!mounted) {
+          return;
+        }
+
+        setState(() {
+          for (int i = 0; i < _lamps.length; i++) {
+            _lamps[i] = channels[i];
+          }
+        });
+      },
+    );
+  }
+
+
+  static const bool useArduino = true;
+
   @override
   void initState() {
     super.initState();
-    _startSimulation();
-    _startLampAnimation();
+
+    print('DASHBOARD: initState');
+
+    if (useArduino) {
+      print('DASHBOARD: запускаем Arduino');
+      _connectArduino();
+    } else {
+      print('DASHBOARD: запускаем симуляцию');
+      _startSimulation();
+      _startLampAnimation();
+    }
   }
 
   void _startLampAnimation() {
@@ -73,7 +115,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     } else {
       _sweepIndex--;
       if (_sweepIndex <= 0) {
-        _isSweeping = false; // переход в idle
+        _isSweeping = false;
       }
     }
   }
@@ -165,6 +207,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void dispose() {
     _timer?.cancel();
     _lampTimer?.cancel();
+
+    _arduinoSubscription?.cancel();
+    _arduinoService.dispose();
+
     super.dispose();
   }
 
@@ -173,26 +219,79 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Scaffold(
       backgroundColor: Colors.black,
       body: Center(
-        child: FittedBox(
-          fit: BoxFit.contain,
-          child: SizedBox(
-            width: 1920,
-            height: 550,
-            child: Stack(
-              children: [
-                Positioned.fill(
-                  child: Image.asset('assets/bg.png', fit: BoxFit.cover),
-                ),
-                Positioned.fill(
-                  child: Container(color: Colors.black.withOpacity(0.1)),
-                ),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Positioned.fill(
+              child: Image.asset('assets/bg.png', fit: BoxFit.cover),
+            ),
+            Positioned.fill(
+              child: Container(color: Colors.black.withOpacity(0.1)),
+            ),
 
-                Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 40),
-                      child: Row(
+            Stack(
+              alignment: Alignment.bottomCenter,
+              children: [
+                Positioned(
+                  top: 5,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 15,
+                      horizontal: 12,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.75),
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(
+                        color: Colors.white.withOpacity(0.08),
+                        width: 1,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.red.withOpacity(0.7),
+                          blurRadius: 60,
+                          offset: Offset(0, 10),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _lamp('assets/gas.png', 0),
+                        SizedBox(width: 15),
+                        _lamp('assets/high_beam.png', 1),
+                        SizedBox(width: 15),
+                        _lamp('assets/open_trunk.png', 2),
+                        SizedBox(width: 15),
+                        _lamp('assets/door_open.png', 3),
+                        SizedBox(width: 15),
+                        _lamp('assets/check.png', 4),
+                        SizedBox(width: 15),
+                        _lamp('assets/battery.png', 5),
+                        SizedBox(width: 15),
+                        _lamp('assets/abs.png', 6),
+                        SizedBox(width: 15),
+                        _lamp('assets/srs.png', 7),
+                        SizedBox(width: 15),
+                        _lamp('assets/oil.png', 8),
+                        SizedBox(width: 15),
+                        _lamp('assets/seatbelt.png', 9),
+                      ],
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 40),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final width = constraints.maxWidth;
+
+                      final small = width * 0.24;
+                      final big = width * 0.42;
+                      final spacing = width * 0.03;
+
+                      return Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
@@ -202,8 +301,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             sizeText: 15,
                             speedKmh: _temp,
                             distanceTravelledKm: _distanceTravelled,
-                            width: 300,
-                            height: 300,
+                            width: small,
+                            height: small,
                             speedScale: Constants.tempScale,
                             speedoMeterColor: Colors.black.withOpacity(0.7),
                             centerText: _temp.toStringAsFixed(0),
@@ -211,7 +310,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             bottomIcon: 'assets/cooler.png',
                           ),
 
-                          const SizedBox(width: 100),
+                          SizedBox(width: spacing),
 
                           Speedometer(
                             minValue: 0,
@@ -219,15 +318,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             sizeText: 30,
                             speedKmh: _speed,
                             distanceTravelledKm: _distanceTravelled,
-                            width: 550,
-                            height: 550,
+                            width: big,
+                            height: big,
                             speedScale: Constants.speedScale,
                             speedoMeterColor: Colors.black.withOpacity(0.7),
                             centerTextDescription: "km/h",
                             centerText: _speed.toStringAsFixed(0),
                           ),
 
-                          const SizedBox(width: 100),
+                          SizedBox(width: spacing),
 
                           Speedometer(
                             minValue: 0,
@@ -235,8 +334,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             sizeText: 20,
                             speedKmh: _oil,
                             distanceTravelledKm: _distanceTravelled,
-                            width: 300,
-                            height: 300,
+                            width: small,
+                            height: small,
                             speedScale: Constants.fuelScale,
                             speedoMeterColor: Colors.black.withOpacity(0.7),
                             centerText: _oil.toStringAsFixed(0),
@@ -244,63 +343,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             bottomIcon: 'assets/gas.png',
                           ),
                         ],
-                      ),
-                    ),
-
-                    Positioned(
-                      bottom: 5,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          vertical: 15,
-                          horizontal: 12,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.75),
-                          borderRadius: BorderRadius.circular(18), // 👈 скругление
-                          border: Border.all(
-                            color: Colors.white.withOpacity(0.08),
-                            width: 1,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.red.withOpacity(0.7),
-                              blurRadius: 60,
-                              offset: Offset(0, 10),
-                            ),
-                          ],
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            _lamp('gas.png', 0),
-                            SizedBox(width: 15),
-                            _lamp('high_beam.png', 1),
-                            SizedBox(width: 15),
-                            _lamp('open_trunk.png', 2),
-                            SizedBox(width: 15),
-                            _lamp('door_open.png', 3),
-                            SizedBox(width: 15),
-                            _lamp('check.png', 4),
-                            SizedBox(width: 15),
-                            _lamp('battery.png', 5),
-                            SizedBox(width: 15),
-                            _lamp('abs.png', 6),
-                            SizedBox(width: 15),
-                            _lamp('srs.png', 7),
-                            SizedBox(width: 15),
-                            _lamp('oil.png', 8),
-                            SizedBox(width: 15),
-                            _lamp('seatbelt.png', 9),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
+                      );
+                    },
+                  ),
                 ),
+
               ],
             ),
-          ),
+          ],
         ),
       ),
     );
